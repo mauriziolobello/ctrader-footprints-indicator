@@ -58,10 +58,12 @@ public partial class Footprints : Indicator
 
     protected override void Initialize()
     {
-        Print("\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557");
-        Print("\u2551  Footprints Indicator v1.6.0     \u2551");
-        Print("\u2551  Uptick/Downtick Volume Analysis  \u2551");
-        Print("\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D");
+        try
+        {
+            Print("\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557");
+            Print("\u2551  Footprints Indicator v1.6.0     \u2551");
+            Print("\u2551  Uptick/Downtick Volume Analysis  \u2551");
+            Print("\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D");
 
         // CRITICAL: Clear all cached data and chart objects on re-initialization
         // (parameter change or Refresh) to prevent phantom candles from old data
@@ -117,7 +119,18 @@ public partial class Footprints : Indicator
         }
         Print($"[Init] Recalculation complete - {barsToRecalculate} bars processed");
 
-        Print($"Initialization complete.");
+            // CRITICAL FIX: Force Y-axis reset to prevent negative range bug when native candles are hidden
+            // This ensures the Y-axis has a valid range even if user hides native candles via "Viewing options"
+            ForceInitialYAxisReset();
+
+            Print($"Initialization complete.");
+        }
+        catch (Exception ex)
+        {
+            Print($"[CRITICAL] Initialization failed: {ex.Message}");
+            Print($"[CRITICAL] Stack trace: {ex.StackTrace}");
+            throw; // Re-throw to ensure cTrader knows initialization failed
+        }
     }
 
     /// <summary>
@@ -492,6 +505,48 @@ public partial class Footprints : Indicator
         }
 
         Print($"Cache pruned: removed {toRemove} old entries (size: {_footprintCache.Count}/{MaxCacheSize})");
+    }
+
+    /// <summary>
+    /// Forces Y-axis reset using OHLC data to prevent negative range bug.
+    /// Called during initialization to ensure valid Y-axis range even if native candles are hidden.
+    /// </summary>
+    private void ForceInitialYAxisReset()
+    {
+        try
+        {
+            if (Bars == null || Bars.Count == 0 || IndicatorArea == null)
+                return;
+
+            // Calculate Y range from last 50 bars OHLC data (not footprints)
+            int barsToCheck = Math.Min(50, Bars.Count);
+            int startIdx = Math.Max(0, Bars.Count - barsToCheck);
+
+            double high = double.MinValue;
+            double low = double.MaxValue;
+
+            for (int i = startIdx; i < Bars.Count; i++)
+            {
+                if (Bars.HighPrices[i] > high) high = Bars.HighPrices[i];
+                if (Bars.LowPrices[i] < low) low = Bars.LowPrices[i];
+            }
+
+            if (high > low)
+            {
+                // Add 5% padding
+                double range = high - low;
+                double padding = range * 0.05;
+                double bottomY = low - padding;
+                double topY = high + padding;
+
+                IndicatorArea.SetYRange(bottomY, topY);
+                Print($"[Init] Y-axis reset: {bottomY:F2} to {topY:F2} (range: {topY - bottomY:F2})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Print($"[Init] Y-axis reset failed: {ex.Message}");
+        }
     }
 
     /// <summary>

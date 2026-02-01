@@ -590,18 +590,24 @@ public class FootprintRenderer
         double bottomY = midPrice - halfRange - padding - extraBottomPadding;
         double topY = midPrice + halfRange + padding;
 
-        // Log diagnostic information (commented out - enable for debugging)
-        // double totalRange = topY - bottomY;
-        // _print($"[AutoZoom] ChartArea.Height={chartHeight:F0}px, PixelsPerLevel={pixelsPerLevel:F1}, MaxLevelsVisible={maxLevelsVisible}");
-        // _print($"[AutoZoom] ActualLevels={actualLevelCount}, TickSize={tickSize}, FootprintRange={footprintPriceRange:F5}");
-        // _print($"[AutoZoom] MidPrice={midPrice:F5}, BottomY={bottomY:F5}, TopY={topY:F5}, TotalRange={totalRange:F5}");
+        // Log diagnostic information for debugging Y-axis range issues
+        double totalRange = topY - bottomY;
+        _print($"[AutoZoom] Visible bars: {recentBars.Count}, Global High: {globalHigh:F2}, Global Low: {globalLow:F2}");
+        _print($"[AutoZoom] MidPrice: {midPrice:F2}, BottomY: {bottomY:F2}, TopY: {topY:F2}, TotalRange: {totalRange:F2}");
+        _print($"[AutoZoom] ChartHeight: {chartHeight:F0}px, MaxLevelCount: {maxLevelCount}");
 
         return (bottomY, topY);
     }
 
+    // Last applied Y range to avoid redundant SetYRange calls
+    private double? _lastBottomY = null;
+    private double? _lastTopY = null;
+    private const double RANGE_CHANGE_THRESHOLD = 0.01; // 1% change threshold
+
     /// <summary>
     /// Applies dynamic Y-axis zoom based on the visible footprint bars.
     /// Uses pixel-based calculation via ChartArea.Height to maximize footprint text readability.
+    /// Only applies if the range has changed significantly to avoid conflicts with cTrader's native zoom.
     /// </summary>
     /// <param name="visibleFootprintBars">List of currently visible footprint bars</param>
     public void ApplyDynamicZoom(List<FootprintBar> visibleFootprintBars)
@@ -614,8 +620,22 @@ public class FootprintRenderer
         if (optimalRange == null)
             return;
 
+        // Only apply if range has changed significantly (avoid redundant calls)
+        if (_lastBottomY.HasValue && _lastTopY.HasValue)
+        {
+            double currentRange = _lastTopY.Value - _lastBottomY.Value;
+            double newRange = optimalRange.Value.TopY - optimalRange.Value.BottomY;
+            double rangeDiff = Math.Abs(newRange - currentRange) / currentRange;
+
+            if (rangeDiff < RANGE_CHANGE_THRESHOLD)
+                return; // Range hasn't changed significantly, skip update
+        }
+
         // Apply the calculated range to the chart Y-axis
         _chartArea.SetYRange(optimalRange.Value.BottomY, optimalRange.Value.TopY);
+
+        _lastBottomY = optimalRange.Value.BottomY;
+        _lastTopY = optimalRange.Value.TopY;
     }
 
     // ============================================

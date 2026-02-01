@@ -11,7 +11,11 @@
       "Bash(dotnet build:*)",
       "Bash(ls:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nRelease v1.6.0 - Market Depth \\(DOM\\) Implementation\n\nMajor Features:\n- Market Depth \\(DOM\\) display showing passive orders at bid/ask levels\n- Real-time order book visualization next to last footprint bar\n- Configurable depth levels \\(3-10, default 5\\)\n- Format: \"VOLUME @ PRICE\" for each depth entry\n\nEnhancements:\n- Bid/Ask level lines halved for better layout\n- Bid/Ask/Spread text repositioned below Bid line\n- DOM positioned immediately after Bid/Ask lines\n\nTechnical Details:\n- New DrawMarketDepth\\(\\) method in FootprintRenderer\n- SetMarketDataReference\\(\\) for MarketData dependency injection\n- Uses MarketDepth.BidEntries and MarketDepth.AskEntries API\n- New parameters: ShowMarketDepth, MaxDepthLevels, DepthColumnWidth\n- Chart objects properly tracked under BID_ASK_KEY for cleanup\n\nArchitecture:\n- SOLID principles maintained\n- Modular design with separated concerns\n- Complete documentation in CHANGELOG.md and CLAUDE.md\n- Custom rendering system for bins, candlesticks, and overlays\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(gh repo create:*)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
     ]
   }
 }
