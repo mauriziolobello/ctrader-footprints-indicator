@@ -784,9 +784,9 @@ public class FootprintRenderer
     }
 
     /// <summary>
-    /// Draws a POC line spanning the full bar width at the midpoint of the POC bin.
-    /// Uses DateTime coordinates for precise positioning across all three columns.
-    /// Uses DotsRare line style to avoid overlapping with volume text.
+    /// Draws a POC line spanning only the central candlestick section.
+    /// Uses DateTime coordinates for precise positioning.
+    /// Uses Solid line style for better visibility without obscuring volume text.
     /// </summary>
     /// <param name="pocBin">The bin identified as Point of Control</param>
     /// <param name="barIndex">Bar index on chart</param>
@@ -795,13 +795,13 @@ public class FootprintRenderer
     {
         string objectName = $"FP_POC_{barTime:yyyyMMddHHmmss}";
 
-        // POC line spans the full bar width (from sell start to buy end)
-        DateTime lineStart = GetBarDateTime(barIndex, SELL_SECTION_START);
-        DateTime lineEnd = GetBarDateTime(barIndex, BUY_SECTION_END);
+        // POC line spans only the central candlestick section (between sell and buy columns)
+        DateTime lineStart = GetBarDateTime(barIndex, SELL_SECTION_END);
+        DateTime lineEnd = GetBarDateTime(barIndex, BUY_SECTION_START);
 
         ChartTrendLine line = _chart.DrawTrendLine(
             objectName, lineStart, pocBin.PriceMid, lineEnd, pocBin.PriceMid,
-            _config.POCColor, _config.POCLineThickness, LineStyle.DotsRare);
+            _config.POCColor, _config.POCLineThickness, LineStyle.Solid);
 
         _chartObjects[barTime].Add(line);
     }
@@ -914,17 +914,20 @@ public class FootprintRenderer
     }
 
     /// <summary>
-    /// Draws a horizontal line at the Point of Control.
-    /// Uses DotsRare line style to avoid overlapping with volume text.
+    /// Draws a horizontal line at the Point of Control spanning only the central candlestick section.
+    /// Uses Solid line style for better visibility without obscuring volume text.
     /// </summary>
     private void DrawPOCLine(PriceLevel poc, int barIndex, DateTime barTime)
     {
         string objectName = $"FP_POC_{barTime:yyyyMMddHHmmss}";
 
-        // Draw horizontal line across the bar
+        // POC line spans only the central candlestick section (between sell and buy columns)
+        DateTime lineStart = GetBarDateTime(barIndex, SELL_SECTION_END);
+        DateTime lineEnd = GetBarDateTime(barIndex, BUY_SECTION_START);
+
         ChartTrendLine line = _chart.DrawTrendLine(
-            objectName, barIndex, poc.Price, barIndex + 1, poc.Price,
-            _config.POCColor, _config.POCLineThickness, LineStyle.DotsRare);
+            objectName, lineStart, poc.Price, lineEnd, poc.Price,
+            _config.POCColor, _config.POCLineThickness, LineStyle.Solid);
 
         // Track object
         _chartObjects[barTime].Add(line);
@@ -990,9 +993,13 @@ public class FootprintRenderer
             lowestPrice = footprintBar.GetLowestPrice();
         }
 
-        double offset = _symbol.TickSize * 12; // Offset below lowest price (well separated from bins)
+        double offset = 40; // Offset below lowest price (avoids overlapping with wick)
 
-        ChartText deltaObj = _chart.DrawText(objectName, deltaText, barIndex, lowestPrice - offset, deltaColor);
+        // Position Delta text exactly centered under the candlestick section (not the full bar width)
+        // This prevents confusion with the previous bar's delta
+        DateTime deltaTime = GetBarDateTime(barIndex, (SELL_SECTION_END + BUY_SECTION_START) / 2.0);
+
+        ChartText deltaObj = _chart.DrawText(objectName, deltaText, deltaTime, lowestPrice - offset, deltaColor);
         deltaObj.FontSize = _config.FontSize;
         deltaObj.HorizontalAlignment = HorizontalAlignment.Center;
         deltaObj.VerticalAlignment = VerticalAlignment.Top;
@@ -1164,8 +1171,8 @@ public class FootprintRenderer
 
     /// <summary>
     /// Draws Market Depth (DOM) data showing passive orders at bid and ask levels.
-    /// Displays bid entries below the current bid and ask entries above the current ask,
-    /// formatted as "VOLUME @ PRICE". Positioned immediately after the Bid/Ask level lines.
+    /// Uses a fixed vertical grid for text positioning to prevent overlapping when prices are close.
+    /// Connects each level to its actual price with a horizontal line.
     /// Updates on every tick.
     /// </summary>
     private void DrawMarketDepth()
@@ -1185,23 +1192,47 @@ public class FootprintRenderer
         int lastBarIndex = _bars.Count - 1;
         int lineStartBar = lastBarIndex + _config.BidAskLevelGap;
         int lineEndBar = lineStartBar + (_config.BidAskLevelWidth / 2);
-        int depthStartBar = lineEndBar + 1;
+        int depthStartBar = lineEndBar;  // Start immediately after Bid/Ask lines (closer)
+        int depthTextBar = depthStartBar + 2;  // Shorter diagonal lines (2 bars instead of 3)
 
-        // Draw Bid side (bid entries) - limited to MaxDepthLevels
+        // Calculate grid spacing as percentage of current price for visible separation
+        // This ensures proper spacing regardless of instrument price scale
+        double basePrice = Math.Max(_symbol.Bid, _symbol.Ask);
+        double gridSpacing = basePrice * 0.0008;  // 0.08% of price per level (~60 points for BTCUSD at 75000)
+
+        // Draw Bid side (bid entries) - with grid layout and connector lines
         if (depth.BidEntries != null && depth.BidEntries.Count > 0)
         {
             int bidCount = Math.Min(_config.MaxDepthLevels, depth.BidEntries.Count);
+            double bidBasePrice = _symbol.Bid;
+
             for (int i = 0; i < bidCount; i++)
             {
                 MarketDepthEntry entry = depth.BidEntries[i];
+
+                // Grid position: below bid, uniformly spaced
+                double gridPrice = bidBasePrice - (gridSpacing * (i + 1));
+
+                // Draw connector line from actual price to grid position
+                string lineName = $"FP_DOM_BidLine_{i}";
+                ChartTrendLine line = _chart.DrawTrendLine(
+                    lineName,
+                    depthStartBar, entry.Price,
+                    depthTextBar, gridPrice,
+                    _config.BidLevelColor,
+                    1,
+                    LineStyle.Solid);
+                _chartObjects[BID_ASK_KEY].Add(line);
+
+                // Draw text at grid position (with offset for spacing after line)
                 string text = $"{entry.Volume} @ {entry.Price.ToString($"F{_symbol.Digits}")}";
                 string objectName = $"FP_DOM_Bid_{i}";
 
                 ChartText textObj = _chart.DrawText(
                     objectName,
                     text,
-                    depthStartBar,
-                    entry.Price,
+                    depthTextBar + 1,  // Offset to create spacing after connector line
+                    gridPrice,
                     _config.BidLevelColor);
                 textObj.FontSize = _config.FontSize;
                 textObj.HorizontalAlignment = HorizontalAlignment.Left;
@@ -1211,21 +1242,39 @@ public class FootprintRenderer
             }
         }
 
-        // Draw Ask side (ask entries) - limited to MaxDepthLevels
+        // Draw Ask side (ask entries) - with grid layout and connector lines
         if (depth.AskEntries != null && depth.AskEntries.Count > 0)
         {
             int askCount = Math.Min(_config.MaxDepthLevels, depth.AskEntries.Count);
+            double askBasePrice = _symbol.Ask;
+
             for (int i = 0; i < askCount; i++)
             {
                 MarketDepthEntry entry = depth.AskEntries[i];
+
+                // Grid position: above ask, uniformly spaced
+                double gridPrice = askBasePrice + (gridSpacing * (i + 1));
+
+                // Draw connector line from actual price to grid position
+                string lineName = $"FP_DOM_AskLine_{i}";
+                ChartTrendLine line = _chart.DrawTrendLine(
+                    lineName,
+                    depthStartBar, entry.Price,
+                    depthTextBar, gridPrice,
+                    _config.AskLevelColor,
+                    1,
+                    LineStyle.Solid);
+                _chartObjects[BID_ASK_KEY].Add(line);
+
+                // Draw text at grid position (with offset for spacing after line)
                 string text = $"{entry.Volume} @ {entry.Price.ToString($"F{_symbol.Digits}")}";
                 string objectName = $"FP_DOM_Ask_{i}";
 
                 ChartText textObj = _chart.DrawText(
                     objectName,
                     text,
-                    depthStartBar,
-                    entry.Price,
+                    depthTextBar + 1,  // Offset to create spacing after connector line
+                    gridPrice,
                     _config.AskLevelColor);
                 textObj.FontSize = _config.FontSize;
                 textObj.HorizontalAlignment = HorizontalAlignment.Left;
