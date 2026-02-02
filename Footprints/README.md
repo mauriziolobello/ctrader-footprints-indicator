@@ -12,11 +12,15 @@ A professional footprint (volume profile) indicator for cTrader that displays bi
 - **Imbalance Detection**: Identifies levels where buy or sell volume dominates significantly
 
 ### Visual Elements
-- Color-coded volume levels (gradient or binary mode)
-- POC horizontal line marker
-- Semi-transparent Value Area box
-- Imbalance markers with distinct colors
-- Delta display (total buy - sell volume)
+- **3-Column Layout**: Separated sell (left), candlestick (center), buy (right) columns for clarity
+- **Color-coded Volume Bins**: Gradient-colored rectangles based on buy/sell dominance ratio
+- **POC Line**: Horizontal line at Point of Control (highest volume bin), limited to candlestick section
+- **Value Area Box**: Semi-transparent rectangle showing price range containing 70% of volume
+- **Imbalance Markers**: Visual indicators for bins where buy or sell volume dominates significantly
+- **Comprehensive Bar Info**: Delta, POC price, OHLC values, and timestamp displayed below each candlestick
+- **Bid/Ask Level Lines**: Real-time horizontal dashed lines showing current Bid and Ask prices
+- **Market Depth (DOM)**: Order book visualization with oblique connector lines to grid positions
+- **Dynamic Y-Axis Zoom**: Automatic or manual zoom control with consistent text positioning
 
 ## Installation
 

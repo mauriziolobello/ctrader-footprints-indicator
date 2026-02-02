@@ -421,6 +421,7 @@ public partial class Footprints : Indicator
 
     /// <summary>
     /// Handles chart scroll events to re-apply dynamic zoom and redraw legend after scrolling.
+    /// Also forces redraw of visible bars to update text positioning after Y-axis changes.
     /// </summary>
     private void OnChartScrollChanged(ChartScrollEventArgs args)
     {
@@ -431,10 +432,14 @@ public partial class Footprints : Indicator
         {
             _renderer.RedrawLegend();
         }
+
+        // Force redraw of visible bars to update Delta text offset after Y-axis zoom
+        ForceRedrawVisibleBars();
     }
 
     /// <summary>
     /// Handles chart zoom events to re-apply dynamic zoom and redraw legend after user zooms.
+    /// Forces redraw of all visible bars to update text positioning with new zoom level.
     /// </summary>
     private void OnChartZoomChanged(ChartZoomEventArgs args)
     {
@@ -444,6 +449,45 @@ public partial class Footprints : Indicator
         if (ShowLegend)
         {
             _renderer.RedrawLegend();
+        }
+
+        // Force redraw of visible bars to update Delta text offset with new zoom level
+        ForceRedrawVisibleBars();
+    }
+
+    /// <summary>
+    /// Forces redraw of all visible bars by clearing and re-rendering them.
+    /// This ensures text positioning (Delta/POC/OHLC) updates correctly after zoom.
+    /// </summary>
+    private void ForceRedrawVisibleBars()
+    {
+        List<int> visibleIndices = new List<int>();
+
+        // Collect visible bar indices
+        for (int i = 0; i < Bars.Count; i++)
+        {
+            if (IsBarVisible(i))
+            {
+                visibleIndices.Add(i);
+            }
+        }
+
+        // Redraw each visible bar immediately
+        foreach (int index in visibleIndices)
+        {
+            DateTime barTime = Bars.OpenTimes[index];
+
+            // Clear existing chart objects for this bar
+            _renderer.ClearFootprint(barTime);
+
+            // Remove from processed set
+            _processedBars.Remove(barTime);
+
+            // Force immediate redraw with updated offset
+            ProcessBar(index, barTime, forceRebuild: false);
+
+            // Mark as processed again
+            _processedBars.Add(barTime);
         }
     }
 

@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Security;
+using System.Text;
 using cAlgo.API;
 using cAlgo.API.Internals;
 using Footprints.Domain;
+using LibraryExtensions;
 
 namespace Footprints.Graphics;
 
@@ -977,23 +980,45 @@ public class FootprintRenderer
     {
         string objectName = $"FP_Delta_{footprintBar.BarTime:yyyyMMddHHmmss}";
 
-        string deltaText = $"\u0394 {footprintBar.Delta:+#;-#;0}";
+        // Build combined text: Delta + Ask/Bid volumes + POC price + OHLC
+        StringBuilder textBuilder = new StringBuilder();
+        textBuilder.Append($"\u0394 {footprintBar.Delta:+#;-#;0}");
+        textBuilder.Append($"\nAsk: {footprintBar.TotalBuyVolume}");
+        textBuilder.Append($"\nBid: {footprintBar.TotalSellVolume}");
+
+        if (footprintBar.PointOfControl != null)
+        {
+            textBuilder.Append($"\nPOC: {footprintBar.PointOfControl.Price.ToString($"F{_symbol.Digits}")}");
+        }
+
+        // Add OHLC values
+        if (_bars != null && barIndex < _bars.Count)
+        {
+            double open = _bars.OpenPrices[barIndex];
+            double high = footprintBar.High;
+            double low = footprintBar.Low;
+            double close = _bars.ClosePrices[barIndex];
+
+            textBuilder.Append($"\nO={open.ToString($"F{_symbol.Digits}")}");
+            textBuilder.Append($"\nH={high.ToString($"F{_symbol.Digits}")}");
+            textBuilder.Append($"\nL={low.ToString($"F{_symbol.Digits}")}");
+            textBuilder.Append($"\nC={close.ToString($"F{_symbol.Digits}")}");
+        }
+
+        // Add date and time in compact format
+        textBuilder.Append($"\n{footprintBar.BarTime:ddMMyy HH:mm}");
+
+        string deltaText = textBuilder.ToString();
         Color deltaColor = footprintBar.Delta > 0 ? _config.BuyColor :
                           footprintBar.Delta < 0 ? _config.SellColor :
                           _config.NeutralColor;
 
-        // Use bin bottom or lowest price level for delta positioning
-        double lowestPrice;
-        if (footprintBar.Bins != null && footprintBar.Bins.Count > 0)
-        {
-            lowestPrice = footprintBar.Bins.Min(b => b.PriceBottom);
-        }
-        else
-        {
-            lowestPrice = footprintBar.GetLowestPrice();
-        }
+        // Use OHLC Low as the lowest price (most reliable)
+        double lowestPrice = footprintBar.Low;
 
-        double offset = 40; // Offset below lowest price (avoids overlapping with wick)
+        // Fixed visual offset: always 100 pixels below the lowest price
+        // This maintains constant visual distance regardless of Y-axis zoom
+        double offset = Math.Abs(_chart.PixelsToPrice(100));
 
         // Position Delta text exactly centered under the candlestick section (not the full bar width)
         // This prevents confusion with the previous bar's delta
@@ -1003,7 +1028,7 @@ public class FootprintRenderer
         deltaObj.FontSize = _config.FontSize;
         deltaObj.HorizontalAlignment = HorizontalAlignment.Center;
         deltaObj.VerticalAlignment = VerticalAlignment.Top;
-
+         
         // Track object
         _chartObjects[footprintBar.BarTime].Add(deltaObj);
     }
@@ -1225,7 +1250,7 @@ public class FootprintRenderer
                 _chartObjects[BID_ASK_KEY].Add(line);
 
                 // Draw text at grid position (with offset for spacing after line)
-                string text = $"{entry.Volume} @ {entry.Price.ToString($"F{_symbol.Digits}")}";
+                string text = $"{entry.VolumeInUnits} @ {entry.Price.ToString($"F{_symbol.Digits}")}";
                 string objectName = $"FP_DOM_Bid_{i}";
 
                 ChartText textObj = _chart.DrawText(
@@ -1267,7 +1292,7 @@ public class FootprintRenderer
                 _chartObjects[BID_ASK_KEY].Add(line);
 
                 // Draw text at grid position (with offset for spacing after line)
-                string text = $"{entry.Volume} @ {entry.Price.ToString($"F{_symbol.Digits}")}";
+                string text = $"{entry.VolumeInUnits} @ {entry.Price.ToString($"F{_symbol.Digits}")}";
                 string objectName = $"FP_DOM_Ask_{i}";
 
                 ChartText textObj = _chart.DrawText(

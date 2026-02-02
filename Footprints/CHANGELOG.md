@@ -5,6 +5,89 @@ All notable changes to the Footprints indicator will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-02-02
+
+### Added
+- **Comprehensive Bar Information Display**: Delta text now includes Ask/Bid totals, POC price, OHLC values, and timestamp in a single consolidated display below each candlestick
+  - Delta value with color-coded indicator (green/red/neutral)
+  - Ask total volume (sum of all buy volumes across the bar)
+  - Bid total volume (sum of all sell volumes across the bar)
+  - POC (Point of Control) price for quick reference
+  - Complete OHLC values (Open, High, Low, Close) formatted to symbol digits
+  - Timestamp in compact format (ddMMyy HH:mm) for precise bar identification
+  - All information centered under the candlestick section for clarity
+  - Font size optimized (FontSize) for readability alongside other chart elements
+
+### Changed
+- **POC Line Width**: POC line now limited to central candlestick section only (between sell and buy columns) instead of spanning the full bar width
+  - Prevents overlap with volume numbers in bin columns
+  - Changed from `DotsRare` back to `Solid` line style for better visibility
+  - Improves chart readability by keeping POC line contained to price action area
+- **Delta Text Positioning**: Enhanced positioning system using pixel-based offset for consistent visual spacing
+  - Offset calculated as fixed 100 pixels converted to price at current zoom level
+  - Maintains constant visual distance regardless of Y-axis zoom changes
+  - Positioned exactly centered under the candlestick section using DateTime coordinates
+  - Uses `GetBarDateTime(barIndex, (SELL_SECTION_END + BUY_SECTION_START) / 2.0)` for precise centering
+- **Market Depth (DOM) Layout**: Refined positioning for better visual hierarchy
+  - Grid spacing calculated as 0.08% of current price for scale independence
+  - Oblique connector lines from actual price levels to fixed grid positions
+  - Text positioned with 1-bar offset after connector lines for clear separation
+  - DOM block positioned closer to Bid/Ask lines (removed gap)
+  - Shorter diagonal connectors (2 bars instead of 3) for more compact layout
+  - Uses `VolumeInUnits` instead of deprecated `Volume` property
+
+### Fixed
+- **Zoom-Induced Text Overlap**: Fixed critical issue where Delta/POC/OHLC text would overlap with candlesticks during Y-axis zoom operations
+  - Added `ForceRedrawVisibleBars()` method that clears and re-renders all visible bars
+  - Subscribed to `Chart.ScrollChanged` event (in addition to existing `ZoomChanged`) to capture vertical zoom operations
+  - When zoom occurs, all visible bars are immediately redrawn with updated pixel-to-price offset
+  - Offset recalculated per bar using current zoom level via `Math.Abs(_chart.PixelsToPrice(100))`
+  - Ensures text maintains 100-pixel visual distance from candlestick across all zoom levels
+- **Y-Axis Reset on Initialization**: Fixed issue where chart could display with incorrect Y-axis range after refresh/restart
+  - `ForceInitialYAxisReset()` method calculates Y range from last 50 bars' OHLC data
+  - Forces `SetYRange()` during initialization independent of footprints or auto-zoom
+  - Resolves problem where cTrader loses Y-axis reference for overlay indicators when native candles are hidden
+  - Works reliably across different broker installations and cTrader configurations
+
+### Technical Details
+- `FootprintRenderer.DrawDelta()` now builds multi-line text using `StringBuilder`:
+  - Line 1: Delta with Unicode Delta symbol (`\u0394`)
+  - Line 2: Ask total volume (`footprintBar.TotalBuyVolume`)
+  - Line 3: Bid total volume (`footprintBar.TotalSellVolume`)
+  - Line 4: POC price formatted to symbol digits
+  - Lines 5-8: OHLC values, each on separate line
+  - Line 9: Timestamp in compact format `ddMMyy HH:mm`
+- `FootprintRenderer.DrawBinPOCLine()` and `DrawPOCLine()` modified:
+  - Line start/end changed from `SELL_SECTION_START/BUY_SECTION_END` to `SELL_SECTION_END/BUY_SECTION_START`
+  - `LineStyle` changed from `DotsRare` to `Solid`
+  - Removed POC price text that was previously drawn above the line
+- `FootprintRenderer.DrawDelta()` offset calculation:
+  - Changed from fixed price-based offset (`_symbol.PipSize * X`) to pixel-based: `Math.Abs(_chart.PixelsToPrice(100))`
+  - Uses `footprintBar.Low` directly instead of calculating from bins (more reliable)
+  - Text positioning uses `GetBarDateTime()` for precise centering under candlestick section
+- `Footprints.cs` zoom event handling:
+  - New `ForceRedrawVisibleBars()` method identifies and redraws all visible bars
+  - Iterates visible bar indices, calls `ProcessBar()` for each with `forceRebuild: false`
+  - Clears chart objects before redraw, removes from `_processedBars`, then re-adds
+  - Called from both `OnChartScrollChanged()` and `OnChartZoomChanged()` event handlers
+- `Footprints.cs` now uses `Chart.ScrollChanged` event:
+  - Captures Y-axis changes (topY/bottomY) that occur during vertical zoom
+  - Complements existing `Chart.ZoomChanged` event for complete zoom coverage
+- `FootprintRenderer.DrawMarketDepth()` refinements:
+  - `gridSpacing = basePrice * 0.0008` (0.08% of current price)
+  - `depthStartBar = lineEndBar` (removed gap)
+  - `depthTextBar = depthStartBar + 2` (shorter lines)
+  - Text at `depthTextBar + 1` with `HorizontalAlignment.Left`
+  - Uses `entry.VolumeInUnits` instead of deprecated `entry.Volume`
+- Added `using System.Text;` for `StringBuilder` support
+- Added `using LibraryExtensions;` for extension methods (user-added)
+- Added `using System.Net.Security;` (user-added, may be unused)
+
+### Performance
+- Redraw operations now limited to visible bars only for efficiency
+- `ForceRedrawVisibleBars()` uses `IsBarVisible()` check before processing
+- Zoom event throttling remains at 300ms to prevent excessive redraws
+
 ## [1.6.0] - 2026-01-31
 
 ### Added
